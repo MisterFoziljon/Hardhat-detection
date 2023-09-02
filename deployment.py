@@ -2,7 +2,6 @@ from ultralytics import YOLO
 import streamlit as st
 import numpy as np
 import tempfile
-import torch
 import cv2
 import os
 
@@ -12,27 +11,19 @@ class Deployment:
         self.helmet_model = "models/ppe.pt"
         self.person_model = "models/person.pt"
         
-        self.colors = [(255,0,0),(0,255,0),(0,0,255)]
+        self.colors = [(0,255,0),(255,0,0),(0,0,255)]
 
-    def detect_helmet(self, image, model):
-        results = model.predict(image, conf=0.7, stream = True, classes=[0,2], device = "cuda:0")
+    def detect_helmet_id(self, image, model):
+        results = model.predict(image, conf=0.4, stream = True, device = "cuda:1")
         
-        detection = None
+        index = None
         for result in results:
             boxes = result.boxes.cpu().numpy()
             for box in boxes:
-                cls = box.cls.astype(int)
-                points = box.xyxy[0].astype(int)
-                color = self.colors[1]
-                selected_class = "Hardhat"
-
-                if cls[0]==2:
-                    color = self.colors[0]
-                    selected_class = "No Hardhat"
-                detection = [points,selected_class,color]
+                index = box.cls.astype(int)[0]
             break
-        
-        return detection
+        print(index)
+        return index
 
 
     def run(self, video_path):
@@ -47,37 +38,29 @@ class Deployment:
         width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
         
-        class_ = {0: 'Hardhat', 2: 'No Hardhat'}
+        class_ = {0: 'Hardhat', 1: 'No Hardhat'}
         
         while video.isOpened():
             try:
                 ret, frame = video.read()
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                results = person_model.predict(frame, conf=0.7, stream = True, classes = [0], device = "cuda:0")
+                results = person_model.predict(frame, conf=0.6, stream = True, classes = [0], device = "cuda:0")
                 
                 for result in results:
                     boxes = result.boxes.cpu().numpy()
+                    
                     for box in boxes:
                         points = box.xyxy[0].astype(int)
                         xmin,ymin,xmax,ymax = points
+                                                
+                        person = frame[max(0, ymin-30):ymax,max(0, xmin-20):min(width, xmax+20)]
+                        person = cv2.cvtColor(person, cv2.COLOR_BGR2RGB)
                         
-                        cv2.rectangle(frame, (xmin,ymin), (xmax,ymax), self.colors[-1], 2)
-                        cv2.putText(frame, "person", (xmin,ymin), cv2.FONT_HERSHEY_SIMPLEX, 1, self.colors[-1], 2, cv2.LINE_AA)
+                        index = self.detect_helmet_id(person, helmet_model)
                         
-                        person = frame[max(0,ymin-30):ymax, xmin:xmax]
-                            
-                        detection = self.detect_helmet(person, helmet_model)
-                                            
-                        if detection is not None:
-                            points, selected_class, color = detection
-                            
-                            xmin_ppe = xmin + points[0]
-                            ymin_ppe = ymin-30 + points[1]
-                            xmax_ppe = xmin + points[2]
-                            ymax_ppe = ymin-30 + points[3]
-
-                            cv2.rectangle(frame, (xmin_ppe,ymin_ppe), (xmax_ppe,ymax_ppe), color, 2)
-                            cv2.putText(frame, selected_class, (xmin_ppe,ymin_ppe), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2, cv2.LINE_AA)
+                        if index is not None:
+                            cv2.rectangle(frame, (xmin,ymin), (xmax,ymax), self.colors[index], 2)
+                            cv2.putText(frame, class_[index], (xmin,ymin), cv2.FONT_HERSHEY_SIMPLEX, 1, self.colors[-1], 2, cv2.LINE_AA)
                         
                 if not ret or video.isOpened()==False:
                     break
