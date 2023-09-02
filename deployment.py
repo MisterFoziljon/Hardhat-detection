@@ -44,7 +44,7 @@ class Deployment:
             try:
                 ret, frame = video.read()
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                results = person_model.predict(frame, conf=0.6, stream = True, classes = [0], device = "cuda:0")
+                results = person_model.predict(frame, conf=0.86, stream = True, classes = [0], device = "cuda:0")
                 
                 for result in results:
                     boxes = result.boxes.cpu().numpy()
