@@ -22,7 +22,7 @@ class Deployment:
             for box in boxes:
                 index = box.cls.astype(int)[0]
             break
-        print(index)
+        
         return index
 
 
